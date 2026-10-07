@@ -2716,8 +2716,7 @@ unsafe fn run_matrix_stale_identity_case(
             wait_for_matrix_line(&lines, "CONTROLLER_PHASE marked")?;
             terminate_retained_controller(&mut controller, MatrixBoundary::Marked)?;
             set_generation_property(identity.hwnd, identity.generation + 1)?;
-            if !recover_owned_region(&record, &record.original, &mut RestoreInjection::None)
-                .is_err()
+            if recover_owned_region(&record, &record.original, &mut RestoreInjection::None).is_ok()
             {
                 return Err(
                     "MECHANICAL FAIL: stale generation was admitted for restoration".to_owned(),
@@ -2732,7 +2731,7 @@ unsafe fn run_matrix_stale_identity_case(
             send_matrix_command(&mut fixture_stdin, "recreate")?;
             let recreated =
                 parse_matrix_identity(&wait_for_matrix_line(&fixture_lines, "FIXTURE_RECREATED")?)?;
-            if recreated == identity || !verify_fixture_identity(identity).is_err() {
+            if recreated == identity || verify_fixture_identity(identity).is_ok() {
                 return Err(
                     "MECHANICAL FAIL: stale HWND generation was admitted after fixture recreation"
                         .to_owned(),

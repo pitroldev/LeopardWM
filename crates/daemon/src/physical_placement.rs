@@ -1,10 +1,8 @@
 //! Physical presentation for tiled HWNDs at shared monitor edges.
 //!
 //! Logical layout (requested widths, membership, scroll) stays unchanged.
-//! Applications retain that full geometry, including where it bleeds onto an
-//! exactly adjacent monitor. Decorations use the shared projection below to
-//! remain clipped at protected owner edges; applications are parked only when
-//! no positive owner-visible slice remains.
+//! Applications retain full native geometry. The platform layer clips their
+//! presentation to their owner monitor independently of size and parking.
 
 use crate::state::*;
 use leopardwm_core_layout::{Rect, Visibility, WindowPlacement};
@@ -474,6 +472,17 @@ impl AppState {
             })
     }
 
+    pub(crate) fn tiled_clip_owners(&self) -> HashMap<u64, Rect> {
+        self.pending_physical_presentations
+            .iter()
+            .filter(|(_, presentation)| !self.is_projection_exempt(&presentation.physical))
+            .filter_map(|(&id, _)| {
+                let owner = self.owner_id_for_window(id)?;
+                Some((id, self.monitors.get(&owner)?.rect))
+            })
+            .collect()
+    }
+
     fn current_pending_physical_presentation(
         &self,
         window_id: u64,
@@ -829,6 +838,79 @@ mod tests {
 
     fn reproduction_window() -> Rect {
         Rect::new(4320, 10, 1600, 1440)
+    }
+
+    #[test]
+    fn native_clip_owner_comes_from_workspace_not_moving_window_center() {
+        let mut state = AppState::new_with_config(
+            crate::config::Config::default(),
+            vec![
+                monitor(1, -2560, 0, 2560, 1440),
+                monitor(2, 0, 0, 2560, 1440),
+            ],
+        );
+        state.config.behavior.clip_tiled_windows = true;
+        state.workspaces.get_mut(&1).unwrap()[0]
+            .insert_window(100, Some(1200))
+            .unwrap();
+        state.workspaces.get_mut(&2).unwrap()[0]
+            .insert_window(200, Some(1200))
+            .unwrap();
+        state.apply_physical_projection(vec![
+            placement(100, Rect::new(-200, 100, 1200, 600), Visibility::Visible),
+            placement(200, Rect::new(-1000, 100, 1200, 600), Visibility::Visible),
+        ]);
+        let owners = state.placement_platform_config().clip_owners;
+        assert_eq!(owners.get(&100), Some(&state.monitors[&1].rect));
+        assert_eq!(owners.get(&200), Some(&state.monitors[&2].rect));
+        state.config.behavior.clip_tiled_windows = false;
+        assert!(state.placement_platform_config().clip_owners.is_empty());
+    }
+
+    #[test]
+    fn fullscreen_maximized_and_floating_windows_are_released_from_clipping() {
+        let mut state = AppState::new_with_config(
+            crate::config::Config::default(),
+            vec![monitor(1, 0, 0, 1920, 1080)],
+        );
+        state.config.behavior.clip_tiled_windows = true;
+        state.workspaces.get_mut(&1).unwrap()[0]
+            .insert_window(100, Some(800))
+            .unwrap();
+        let logical = placement(100, Rect::new(-100, 0, 800, 600), Visibility::Visible);
+        state.apply_physical_projection(vec![logical.clone()]);
+        assert!(state
+            .placement_platform_config()
+            .clip_owners
+            .contains_key(&100));
+        state.injected_window_maximized.insert(100, true);
+        assert!(state.placement_platform_config().clip_owners.is_empty());
+        state.injected_window_maximized.insert(100, false);
+        state.workspaces.get_mut(&1).unwrap()[0].toggle_fullscreen();
+        assert!(state.placement_platform_config().clip_owners.is_empty());
+        state.workspaces.get_mut(&1).unwrap()[0].toggle_fullscreen();
+        let mut floating = logical;
+        floating.column_index = usize::MAX;
+        state.apply_physical_projection(vec![floating]);
+        assert!(state.placement_platform_config().clip_owners.is_empty());
+    }
+
+    #[test]
+    fn changing_clip_policy_invalidates_unchanged_native_placements() {
+        let mut state = AppState::new_with_config(
+            crate::config::Config::default(),
+            vec![monitor(1, 0, 0, 1920, 1080)],
+        );
+        let before = state.physical_invalidation_id.load(Ordering::SeqCst);
+        let mut config = state.config.clone();
+        config.behavior.clip_tiled_windows = true;
+        state.apply_config(config);
+        assert!(state.physical_invalidation_id.load(Ordering::SeqCst) > before);
+        let before = state.physical_invalidation_id.load(Ordering::SeqCst);
+        let mut config = state.config.clone();
+        config.behavior.clip_tiled_windows = false;
+        state.apply_config(config);
+        assert!(state.physical_invalidation_id.load(Ordering::SeqCst) > before);
     }
 
     #[test]

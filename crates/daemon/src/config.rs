@@ -416,6 +416,11 @@ pub struct BehaviorConfig {
     #[serde(default = "default_true")]
     pub disable_snap_layouts: bool,
 
+    /// Opt-in fork-specific native region clipping. Can change DWM frames;
+    /// disable to compare upstream presentation or troubleshoot custom regions.
+    #[serde(default = "default_false")]
+    pub clip_tiled_windows: bool,
+
     /// Whether to check GitHub Releases once a day for a newer version.
     /// Single anonymous HTTPS GET to api.github.com; no other telemetry.
     #[serde(default = "default_true")]
@@ -502,6 +507,7 @@ impl Default for BehaviorConfig {
             focus_follows_mouse: false,
             focus_follows_mouse_delay_ms: default_focus_delay(),
             disable_snap_layouts: true,
+            clip_tiled_windows: false,
             check_for_updates: true,
             tab_close_action: TabCloseAction::default(),
             swap_chain_ghost_animation: true,

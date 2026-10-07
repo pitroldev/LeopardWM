@@ -3581,10 +3581,10 @@ impl AppState {
         if self
             .post_admission_maximize_restore_eligible
             .contains_key(&hwnd)
-            && !self
+            && self
                 .window_managed_at
                 .get(&hwnd)
-                .is_some_and(|managed_at| managed_at.elapsed() < SNAPBACK_SETTLE_AFTER_CREATE)
+                .is_none_or(|managed_at| managed_at.elapsed() >= SNAPBACK_SETTLE_AFTER_CREATE)
         {
             self.post_admission_maximize_restore_eligible.remove(&hwnd);
         }

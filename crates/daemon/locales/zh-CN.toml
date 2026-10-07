@@ -170,6 +170,8 @@
 "settings.behavior.fullscreen_follows_focus.description" = "将全屏状态转移到下一个焦点窗口（单窗口模式），而非返回平铺布局。关闭后，全屏仅影响当前窗口"
 "settings.behavior.disable_snap_layouts.label" = "禁用贴靠布局"
 "settings.behavior.disable_snap_layouts.description" = "防止平铺窗口在 Windows 11 中拖到边缘时贴靠"
+"settings.behavior.clip_tiled_windows.label" = "将平铺窗口限制在所属显示器内（实验性）"
+"settings.behavior.clip_tiled_windows.description" = "在显示器边缘裁剪部分可见的列，而不调整内容大小。可能改变窗口边框，并暂时禁用 Mica。"
 "settings.behavior.swap_chain_ghost_animation.label" = "平滑应用动画（实验性）"
 "settings.behavior.swap_chain_ghost_animation.description" = "在列滚动时使用 DWM 缩略图为 Chromium／Electron／Firefox／Terminal／.NET 窗口制作动画，消除 Chrome、Slack、Discord、WinForms/WPF 等应用中的 1 像素抖动和重绘卡顿。"
 "settings.behavior.floating_above_tiled.label" = "将浮动窗口保持在平铺窗口之上"

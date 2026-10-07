@@ -192,6 +192,9 @@ pub fn dwm_cloak_window(window_id: WindowId) {
 /// Bypasses `apply_cloak_state`'s OR-check: the intent here is "force
 /// visible" regardless of why the window was originally cloaked.
 pub fn dwm_uncloak_window(window_id: WindowId) {
+    if let Err(error) = crate::restore_window_region(window_id) {
+        tracing::warn!(window_id, %error, "Could not release monitor clipping");
+    }
     forget_offscreen_placement(window_id);
     {
         let mut guard = lock_cloaked();
@@ -248,6 +251,9 @@ pub(crate) fn emergency_uncloak_tracked(window_ids: &[WindowId]) {
 /// Force-uncloak every tracked window from both sets. Called during
 /// shutdown and panic recovery. Bypasses `apply_cloak_state`.
 pub fn dwm_uncloak_all() {
+    if let Err(error) = crate::restore_all_window_regions() {
+        tracing::warn!(%error, "Could not restore all monitor clips");
+    }
     if let Ok(mut records) = OFFSCREEN_PLACEMENTS.lock() {
         records.clear();
     }
@@ -522,7 +528,8 @@ pub fn apply_placements(
     post_animation_landing: bool,
 ) -> Result<ApplyPlacementsResult, Win32Error> {
     let mut queued_endpoints = HashMap::new();
-    let owner_deferrals = probe_placement_owners(placements, false, cache.is_none());
+    let clipping = !config.clip_owners.is_empty();
+    let owner_deferrals = probe_placement_owners(placements, clipping, cache.is_none() || clipping);
     apply_placements_inner(
         placements,
         config,
@@ -571,6 +578,7 @@ fn apply_placements_inner(
     }
     let empty_result = ApplyPlacementsResult::default();
     if placements.is_empty() {
+        crate::monitor_clipping::finish_clips(config, &HashSet::new())?;
         if let Some(cache) = cache.as_deref_mut() {
             cache.clear();
         }
@@ -586,7 +594,7 @@ fn apply_placements_inner(
     // Animation frames (cache present) use async positioning so hung windows
     // don't stall the vsync-driven animation loop. Landing passes (no cache)
     // stay synchronous for precise final placement.
-    let async_flag = if cache.is_some() {
+    let async_flag = if cache.is_some() && config.clip_owners.is_empty() {
         SWP_ASYNCWINDOWPOS
     } else {
         SET_WINDOW_POS_FLAGS(0)
@@ -607,7 +615,7 @@ fn apply_placements_inner(
     let high_contrast = crate::is_high_contrast_enabled();
     let force_positioning = !allow_landing_measurement_retry;
     let (
-        entries,
+        mut entries,
         skipped,
         maximized_skipped_window_ids,
         async_recovery_window_ids,
@@ -621,6 +629,22 @@ fn apply_placements_inner(
         owner_deferrals,
         &config.monitor_rects,
     );
+    // Region changes are synchronous. Keep unresponsive clipping owners at
+    // their last safe position rather than queue a move without its region.
+    entries.retain(|entry| {
+        !(config.clip_owners.contains_key(&entry.window_id)
+            && owner_deferrals.wait_for_owner.contains(&entry.window_id))
+    });
+    let clip_targets = entries
+        .iter()
+        .map(|entry| {
+            (
+                entry.window_id,
+                (Rect::new(entry.x, entry.y, entry.w, entry.h), entry.insets),
+            )
+        })
+        .collect();
+    crate::monitor_clipping::prepare_clips(&clip_targets, config, &owner_deferrals.pending)?;
     // Uncloak before positioning so DWM composites returning windows at their
     // new rect before the landing measurement. The retry can repeat this safely.
     uncloak_becoming_visible(&entries);
@@ -665,7 +689,7 @@ fn apply_placements_inner(
     // once after evicting affected inset tuples or confirming suspect oversize
     // measurements; first-pass suspect marks may carry, but first-pass
     // violation/cache/nudge finalization does not.
-    let detection = if async_flag == SET_WINDOW_POS_FLAGS(0) {
+    let detection = if cache.is_none() {
         detect_size_violations(
             &entries,
             &failed_window_ids,
@@ -764,7 +788,9 @@ fn apply_placements_inner(
         nudge_sticky_compositor_windows(&nudge_targets);
     }
 
-    let landings = if async_flag == SET_WINDOW_POS_FLAGS(0) {
+    crate::monitor_clipping::finish_clips(config, &pending_window_ids)?;
+
+    let landings = if cache.is_none() {
         let mut queued_recoveries = lock_queued_recoveries();
         let submissions = queued_recoveries.get_or_insert_with(HashMap::new);
         collect_placement_landings_with_recoveries(
@@ -1943,20 +1969,28 @@ fn detect_size_violations(
         }
         // Query DWM for the current visible bounds. This ignores any
         // invisible-border metrics and reports what the user actually sees.
-        let (visible_w, visible_h) = unsafe {
-            let mut ext = RECT::default();
-            if DwmGetWindowAttribute(
-                entry.hwnd,
-                DWMWA_EXTENDED_FRAME_BOUNDS,
-                &mut ext as *mut RECT as *mut _,
-                std::mem::size_of::<RECT>() as u32,
-            )
-            .is_err()
-            {
-                continue;
-            }
-            (ext.right - ext.left, ext.bottom - ext.top)
-        };
+        let (visible_w, visible_h) =
+            if crate::monitor_clipping::saved_insets(entry.window_id).is_some() {
+                let Some(rect) = crate::get_window_visible_rect(entry.window_id) else {
+                    continue;
+                };
+                (rect.width, rect.height)
+            } else {
+                unsafe {
+                    let mut ext = RECT::default();
+                    if DwmGetWindowAttribute(
+                        entry.hwnd,
+                        DWMWA_EXTENDED_FRAME_BOUNDS,
+                        &mut ext as *mut RECT as *mut _,
+                        std::mem::size_of::<RECT>() as u32,
+                    )
+                    .is_err()
+                    {
+                        continue;
+                    }
+                    (ext.right - ext.left, ext.bottom - ext.top)
+                }
+            };
         measurements.push(WindowSizeMeasurement {
             hwnd: entry.hwnd,
             window_id: entry.window_id,
@@ -2454,6 +2488,9 @@ fn frame_insets_from_rects(frame_rect: Rect, visible_rect: Rect) -> Option<(i32,
 }
 
 fn query_window_frame_insets(hwnd: HWND) -> Option<(i32, i32, i32, i32)> {
+    if let Some(insets) = crate::monitor_clipping::saved_insets(hwnd.0 as usize as u64) {
+        return Some(insets);
+    }
     unsafe {
         let mut frame_rect = RECT::default();
         GetWindowRect(hwnd, &mut frame_rect).ok()?;
@@ -4468,6 +4505,7 @@ mod tests {
         assert_eq!(get_window_invisible_insets(window.id), (0, 0, 0, 0));
         let config = PlatformConfig {
             monitor_rects: vec![Rect::new(0, 0, 800, 600)],
+            ..PlatformConfig::default()
         };
         let placement = offscreen_placement(
             window.id,
@@ -4572,6 +4610,7 @@ mod tests {
         ] {
             let config = PlatformConfig {
                 monitor_rects: monitors,
+                ..PlatformConfig::default()
             };
             apply_placements(std::slice::from_ref(&placement), &config, None, false).unwrap();
             let actual = window.rect();

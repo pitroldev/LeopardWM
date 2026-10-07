@@ -170,6 +170,8 @@
 "settings.behavior.fullscreen_follows_focus.description" = "Carry fullscreen to the next focused window (monocle) instead of dropping to the tiled layout. Turn off so fullscreen affects only the one window"
 "settings.behavior.disable_snap_layouts.label" = "Disable snap layouts"
 "settings.behavior.disable_snap_layouts.description" = "Prevent Windows 11 edge-drag snapping for tiled windows"
+"settings.behavior.clip_tiled_windows.label" = "Keep tiled windows on their monitor (experimental)"
+"settings.behavior.clip_tiled_windows.description" = "Clip partially visible columns at monitor edges without resizing their content. May change window frames and temporarily disable Mica."
 "settings.behavior.swap_chain_ghost_animation.label" = "Smooth app animations (experimental)"
 "settings.behavior.swap_chain_ghost_animation.description" = "Use DWM thumbnails to animate Chromium / Electron / Firefox / Terminal / .NET windows during column scrolls. Eliminates the 1px wobble and repaint stutter on Chrome, Slack, Discord, WinForms/WPF apps, etc."
 "settings.behavior.floating_above_tiled.label" = "Keep floating windows above tiled windows"

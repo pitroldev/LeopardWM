@@ -312,6 +312,12 @@ fn emergency_primary_work_area() -> Option<Rect> {
 /// Best-effort tray Quit recovery. The caller must independently enforce `deadline`:
 /// shell, DWM, tracing, and style calls can block even though window moves are asynchronous.
 pub fn emergency_restore_windows(window_ids: &[WindowId], deadline: std::time::Instant) {
+    for &id in window_ids {
+        if std::time::Instant::now() >= deadline {
+            break;
+        }
+        let _ = crate::restore_window_region(id);
+    }
     let Ok(_dpi) = RecoveryDpiContext::enter() else {
         return;
     };
@@ -338,6 +344,7 @@ pub fn emergency_restore_windows(window_ids: &[WindowId], deadline: std::time::I
 /// Returns `Ok(true)` if the window was restored, `Ok(false)` if it was not at
 /// sentinel coordinates, and `Err` if restore operations failed.
 pub fn restore_window_moved_offscreen(window_id: WindowId) -> Result<bool, Win32Error> {
+    crate::restore_window_region(window_id)?;
     let _dpi = RecoveryDpiContext::enter()?;
     let primary = get_primary_monitor()?;
     let work_areas = recovery_work_areas();

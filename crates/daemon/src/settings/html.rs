@@ -1127,6 +1127,10 @@ input[type="range"]::-webkit-slider-thumb {
             <label class="toggle"><input type="checkbox" id="behavior-disable_snap_layouts"><span class="track"></span><span class="thumb"></span></label>
           </div>
           <div class="field">
+            <div class="field-info"><div class="field-label" data-i18n="settings.behavior.clip_tiled_windows.label"></div><div class="field-desc" data-i18n="settings.behavior.clip_tiled_windows.description"></div></div>
+            <label class="toggle"><input type="checkbox" id="behavior-clip_tiled_windows"><span class="track"></span><span class="thumb"></span></label>
+          </div>
+          <div class="field">
             <div class="field-info"><div class="field-label" data-i18n="settings.behavior.swap_chain_ghost_animation.label"></div><div class="field-desc" data-i18n="settings.behavior.swap_chain_ghost_animation.description"></div></div>
             <label class="toggle"><input type="checkbox" id="behavior-swap_chain_ghost_animation"><span class="track"></span><span class="thumb"></span></label>
           </div>
@@ -1673,6 +1677,7 @@ function init(cfg) {
   setChecked('behavior-skip_empty_workspaces', cfg.behavior.skip_empty_workspaces === true);
   setChecked('behavior-fullscreen_follows_focus', cfg.behavior.fullscreen_follows_focus !== false);
   setChecked('behavior-disable_snap_layouts', cfg.behavior.disable_snap_layouts !== false);
+  setChecked('behavior-clip_tiled_windows', cfg.behavior.clip_tiled_windows === true);
   setChecked('behavior-swap_chain_ghost_animation', cfg.behavior.swap_chain_ghost_animation === true);
   setChecked('behavior-floating_above_tiled', cfg.behavior.floating_above_tiled === true);
   setCb('cb-behavior-taskbar_buttons', cfg.behavior.taskbar_buttons || 'hide_offscreen');
@@ -2327,6 +2332,7 @@ function readConfig() {
       skip_empty_workspaces: checked('behavior-skip_empty_workspaces'),
       fullscreen_follows_focus: checked('behavior-fullscreen_follows_focus'),
       disable_snap_layouts: checked('behavior-disable_snap_layouts'),
+      clip_tiled_windows: checked('behavior-clip_tiled_windows'),
       swap_chain_ghost_animation: checked('behavior-swap_chain_ghost_animation'),
       floating_above_tiled: checked('behavior-floating_above_tiled'),
       taskbar_buttons: cbVal('cb-behavior-taskbar_buttons'),

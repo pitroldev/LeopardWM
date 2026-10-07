@@ -83,6 +83,9 @@ impl MonitorInfo {
 #[derive(Debug, Clone, Default)]
 pub struct PlatformConfig {
     pub monitor_rects: Vec<Rect>,
+    /// Physical monitor ownership, supplied by the daemon, never inferred from
+    /// the moving window's center. Absent IDs are released from region clipping.
+    pub clip_owners: std::collections::HashMap<WindowId, Rect>,
 }
 
 #[cfg(test)]

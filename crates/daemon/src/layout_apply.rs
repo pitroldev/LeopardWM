@@ -673,6 +673,10 @@ impl AppState {
         #[cfg(not(test))]
         let invoke_injected_empty_worker = false;
         if dispatched_placements.is_empty() && !invoke_injected_empty_worker {
+            // Application fullscreen may filter the last native placement. No
+            // platform worker will run to release its previous region clip.
+            leopardwm_platform_win32::restore_all_window_regions()
+                .map_err(|error| anyhow!(error.to_string()))?;
             self.acknowledge_empty_physical_state(
                 physical_request_id,
                 physical_invalidation_id,
@@ -874,10 +878,10 @@ impl AppState {
     }
 
     pub(crate) fn run_display_change_apply_retry(&mut self, generation: u64) -> Result<()> {
-        if !self
+        if self
             .display_change_apply_retry
             .as_ref()
-            .is_some_and(|retry| retry.generation == generation)
+            .is_none_or(|retry| retry.generation != generation)
         {
             return Ok(());
         }

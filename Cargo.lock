@@ -1158,6 +1158,8 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "leopardwm-core-layout",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
  "tracing",
  "windows",

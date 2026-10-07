@@ -314,6 +314,15 @@ pub fn cursor_is_over_window(hwnd: WindowId) -> bool {
 /// excluding invisible window borders. Falls back to GetWindowRect if DWM
 /// attributes are unavailable.
 pub fn get_window_visible_rect(hwnd: WindowId) -> Option<Rect> {
+    if let Some((left, top, right, bottom)) = crate::monitor_clipping::saved_insets(hwnd) {
+        let outer = get_window_chrome_rect(hwnd)?;
+        return Some(Rect::new(
+            outer.x + left,
+            outer.y + top,
+            outer.width - left - right,
+            outer.height - top - bottom,
+        ));
+    }
     let hwnd_win = HWND(hwnd as *mut c_void);
     unsafe {
         let mut extended_rect = RECT::default();

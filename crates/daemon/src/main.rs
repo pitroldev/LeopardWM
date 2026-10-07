@@ -3574,10 +3574,10 @@ fn arm_display_change_apply_retry_timer(ctx: &mut EventLoopCtx<'_>, generation: 
 async fn handle_display_change_apply_retry(ctx: &mut EventLoopCtx<'_>, generation: u64) {
     let result = {
         let mut state = ctx.state.lock().await;
-        if !state
+        if state
             .display_change_apply_retry
             .as_ref()
-            .is_some_and(|retry| retry.generation == generation)
+            .is_none_or(|retry| retry.generation != generation)
         {
             return;
         }

@@ -170,6 +170,11 @@ impl AppState {
 
     /// Apply configuration to all workspaces.
     pub(crate) fn apply_config(&mut self, config: config::Config) {
+        if self.config.behavior.clip_tiled_windows != config.behavior.clip_tiled_windows {
+            // The logical rectangles may be unchanged; native presentation must
+            // still be applied so enabling/disabling clipping takes effect.
+            self.bump_physical_invalidation();
+        }
         // Config reload may turn off swap_chain_ghost_animation, change
         // monitor geometry assumptions, or simply re-evaluate behavior.
         // Cleanest contract: any in-flight ghost animation dies on

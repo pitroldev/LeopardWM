@@ -4304,7 +4304,7 @@ mod tests {
                 }
             );
             assert_eq!(s.next_deferred_input(), None);
-            assert!(!s.complete_window_move(s.model.clone(), 7, 1).is_some());
+            assert!(s.complete_window_move(s.model.clone(), 7, 1).is_none());
         }
     }
 
@@ -4522,9 +4522,9 @@ mod tests {
         session.release();
         assert_eq!(s.handle_input(VK_ESCAPE.0), OverviewInputResult::Close);
         assert!(!session.is_current(generation));
-        assert!(!s
+        assert!(s
             .complete_window_move(glide_model(1), 7, generation)
-            .is_some());
+            .is_none());
         assert_eq!(s.model, before);
         assert_eq!(s.selection_window_id(), Some(7));
         assert_eq!(s.next_deferred_input(), None);
@@ -4564,7 +4564,7 @@ mod tests {
         let before = s.model.clone();
         assert!(!session.is_current(old));
         assert!(session.is_current(new));
-        assert!(!s.complete_window_move(glide_model(1), 7, old).is_some());
+        assert!(s.complete_window_move(glide_model(1), 7, old).is_none());
         assert_eq!(s.model, before);
         assert_eq!(s.selection_window_id(), Some(8));
         assert_eq!(s.next_deferred_input(), None);

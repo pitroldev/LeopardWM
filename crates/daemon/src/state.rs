@@ -1055,6 +1055,11 @@ impl AppState {
     pub(crate) fn placement_platform_config(&self) -> PlatformConfig {
         let mut config = self.platform_config.clone();
         config.monitor_rects = self.monitors.values().map(|monitor| monitor.rect).collect();
+        config.clip_owners = if self.config.behavior.clip_tiled_windows {
+            self.tiled_clip_owners()
+        } else {
+            HashMap::new()
+        };
         config
     }
 
