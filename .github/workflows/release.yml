@@ -85,7 +85,7 @@ jobs:
     # forks microsoft/winget-pkgs, then opens a version-bump PR from that fork.
     if: ${{ !github.event.repository.fork }}
     steps:
-      - uses: vedantmgoyal9/winget-releaser@a8fff44b123f115ce4c21543edf8b677376fc7e0 # main 2026-07-28
+      - uses: vedantmgoyal9/winget-releaser@8e1180065275ff8d815d981788ee8592c8735b8c # main 2026-07-28
         with:
           identifier: jcardama.LeopardWM
           installers-regex: '\.msi$'
