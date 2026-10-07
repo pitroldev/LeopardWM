@@ -440,8 +440,9 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
         return TRUE;
     }
 
-    // Skip cloaked windows (e.g., on other virtual desktops)
-    if is_window_cloaked(hwnd) {
+    // Shell cloak alone can lag a native desktop transition. Ask the shell for
+    // actual membership as well before importing the window into our layout.
+    if !crate::is_window_on_current_desktop(hwnd.0 as u64) {
         return TRUE;
     }
 

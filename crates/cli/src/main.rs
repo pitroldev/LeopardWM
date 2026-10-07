@@ -12,6 +12,8 @@ mod daemon_cmds;
 mod diagnostics_validation;
 mod doctor;
 mod ipc_client;
+#[cfg(test)]
+mod monitor_clipping_live_tests;
 mod output;
 mod shortcut_guide;
 #[cfg(test)]

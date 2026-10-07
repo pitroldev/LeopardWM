@@ -41,6 +41,7 @@ mod monitor_clipping;
 mod placement;
 mod system;
 mod types;
+mod virtual_desktop;
 mod visibility;
 mod window_identity;
 mod window_query;
@@ -50,6 +51,7 @@ pub use gestures::*;
 pub use hotkeys::*;
 pub use keyboard_hook::*;
 pub use mouse_hook::*;
+pub use virtual_desktop::is_window_on_current_desktop;
 
 // Re-export public API from submodules
 pub use elevation::{

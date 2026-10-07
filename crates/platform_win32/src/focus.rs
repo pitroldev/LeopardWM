@@ -202,6 +202,13 @@ pub fn set_foreground_window(hwnd: WindowId) -> Result<bool, Win32Error> {
             return Err(Win32Error::WindowNotFound(window_id));
         }
 
+        // Focusing a saved window on another native desktop can switch the
+        // user's desktop. Check before restoring minimized windows or attaching
+        // input queues; never use focus as a way to import a foreign window.
+        if !crate::is_window_on_current_desktop(window_id) {
+            return Ok(false);
+        }
+
         if IsIconic(hwnd).as_bool() {
             let _ = ShowWindow(hwnd, SW_RESTORE);
             if IsIconic(hwnd).as_bool() {

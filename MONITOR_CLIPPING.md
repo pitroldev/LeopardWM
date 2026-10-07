@@ -123,3 +123,70 @@ Remove-Item Env:\LEOPARDWM_TEST_MONITOR_CLIPPING
 These regressions validate the repaired paths, not the reporter's exact desktop
 sequence or pixel-level DWM presentation. Full desktop acceptance remains pending.
 The preview remains experimental and the desktop daemon remains stopped.
+
+## Native Windows desktop isolation after startup feedback
+
+The user confirmed improved clipping but reported windows from separate Win+Tab
+desktops being mixed at startup. Snapshot restoration admitted every live,
+manageable saved HWND before enumeration. Consequently it bypassed the existing
+shell-cloak admission filter and could target a window on another native desktop.
+
+The fork now checks current Windows desktop membership during snapshot restore,
+enumeration and live admission, using the documented `IVirtualDesktopManager`.
+Foreground requests repeat the check before restoring minimized windows or
+attaching input queues. The COM interface stays within its thread's apartment;
+failed queries defer the window and reconnect on the next attempt. Shell-cloaked
+windows are excluded, while LeopardWM's own app-cloaked inactive workspaces on
+the current native desktop remain restorable. No production path calls
+`MoveWindowToDesktop`.
+
+Validation on 2026-10-07:
+- A native regression created two disposable framed windows and moved only its
+  own second HWND to an already-existing Windows desktop. The old restore
+  predicate accepted that HWND; the corrected restore and enumeration rejected
+  it, while keeping the local app-cloaked window. A foreground request for the
+  foreign HWND was refused without changing foreground, native desktop or rect.
+- The optimized full daemon was then started twice, with an isolated config that
+  ignored all user windows: once with both fixture HWNDs in a saved snapshot,
+  once with no saved workspaces. Each run observed 12 IPC window lists, including
+  a refresh halfway through. Only the current-desktop fixture was managed.
+  Native readback confirmed the foreign fixture's desktop and rect were unchanged.
+- The harness restored the original config and workspace-state files byte for
+  byte, verified by SHA-256, and closed the daemon and disposable windows.
+- Repository validation passed Clippy, 2,114 workspace tests and the tools tests;
+  optimized binaries passed the GUI-subsystem and version checks.
+
+```powershell
+$env:LEOPARDWM_TEST_NATIVE_DESKTOPS = '1'
+cargo test -p leopardwm-daemon startup_restore_does_not_import_or_focus_another_native_desktop -- --ignored --nocapture
+Remove-Item Env:\LEOPARDWM_TEST_NATIVE_DESKTOPS
+```
+
+This is startup isolation, not a conversion of Windows desktops into LeopardWM
+workspaces. Independent saved LeopardWM layouts for each native desktop and
+native-desktop switching throughout a running session remain unsupported.
+Computer Use still returned native-pipe error 2; validation uses the previously
+authorized native fallback, not compositor screenshots.
+
+The CLI now also contains opt-in live-daemon containment and owned-fixture region
+repair regressions. They query production IPC ownership and native window/region
+geometry, require actual content clipping, record movement ranges, and exclude
+floating, maximized and native move/size operations. An earlier diagnostic run
+observed one late 7px overlap with changed geometry; its cause was not established.
+The subsequent complete six-Chrome-window run covered all three monitors with
+3,300 native samples and no violations, and repaired a removed region in 36ms.
+This evidence does not promise absence of every transient compositor artifact.
+
+The final full-daemon repetition after the startup fix moved both Chrome windows
+on each of the three monitors (all six HWNDs changed X by over 50px). It completed
+3,300 native samples, including 1,686 content-clipped samples, with zero measured
+overlaps and zero readback errors. Deliberate clip removal was repaired in 352ms.
+An earlier stricter run stopped on Win32 error 6 from `GetWindowRgn`; its cause
+was not established. The audit now records readback failures separately and
+fails on them instead of losing the report, and rechecks PID after readback to
+discard departed window lifetimes. No production clipping code was relaxed.
+
+One full-suite repetition hit the existing asynchronous size-only owner-deferral
+assertion in `display_change_regression.rs:330`. The focused rerun and the final
+unmodified `tools/check.ps1` run passed (Clippy, 2,114 tests, tools tests). Its
+timing sensitivity was not addressed by this startup-desktop change.

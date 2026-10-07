@@ -1014,13 +1014,12 @@ impl AppState {
             return AdmitOutcome::TopmostPopup;
         }
         {
-            // Skip shell-cloaked windows (suspended UWP frames, windows
-            // on other virtual desktops). These are valid HWNDs with
-            // WS_VISIBLE but no rendered content.
+            // Skip shell-cloaked and foreign-native-desktop windows, including
+            // the interval before DWM catches up with a desktop transition.
             #[cfg(not(test))]
-            if leopardwm_platform_win32::is_window_shell_cloaked(hwnd) {
+            if !leopardwm_platform_win32::is_window_on_current_desktop(hwnd) {
                 debug!(
-                    "Ignoring shell-cloaked window: {} ({})",
+                    "Deferring window outside the current native desktop: {} ({})",
                     win_info.title, win_info.class_name
                 );
                 return AdmitOutcome::ShellCloaked;

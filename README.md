@@ -51,7 +51,7 @@ https://github.com/user-attachments/assets/43715787-1501-4e19-b693-f301065e914d
 A few deliberate **non-features**, so you know what you're getting:
 
 - **Scroll-first, not multi-layout.** No BSP, no DWindle, no Equal/Stair/UltrawideVerticalStack — and we won't add them. niri (Wayland) and PaperWM (GNOME) stay scrolling-only by choice; the horizontal strip *is* the identity. If you want 9 layout variants, [komorebi](https://github.com/LGUG2Z/komorebi) is the right tool.
-- **No Virtual Desktop bridging.** Per-monitor workspaces don't map cleanly to Windows' global Virtual Desktops, and the only library that bridges them (`winvd`) breaks every 3-6 months on Windows feature updates. Instead, `Win+Ctrl+Arrow` is intercepted and routed to LeopardWM's workspace prev/next so the native muscle memory still works.
+- **No Virtual Desktop bridging.** Per-monitor workspaces are separate from Windows' global Virtual Desktops. Startup restores/imports windows only from the current Windows desktop, and focus requests cannot activate a window on another native desktop. This uses the documented, read-only `IVirtualDesktopManager` API; it does not migrate or convert Win+Tab desktops. Switching native desktops while LeopardWM is running still does not provide independent saved LeopardWM layouts per native desktop. `Win+Ctrl+Arrow` is intercepted and routed to LeopardWM's workspace prev/next.
 - **Named-pipe IPC, not WebSocket.** Lower latency, no port allocation, no firewall prompts. If browser-based bar integration becomes a real ask, we'll add a thin bridge rather than make the daemon serve sockets directly.
 
 ## Features

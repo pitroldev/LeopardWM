@@ -206,13 +206,17 @@ impl AppState {
         snapshot: &StateSnapshot,
     ) -> HashSet<(MonitorId, usize)> {
         let restored_slots = self.restore_workspace_structure_with(snapshot, |hwnd| {
-            // Keep a saved window only if it's still alive AND manageable. An
+            // Keep only live, manageable windows on the current native desktop.
+            // Saved HWNDs bypass startup enumeration, so without this gate they
+            // import other Win+Tab desktops into the same LeopardWM workspace.
+            // Do not reject our own app-cloaked inactive workspaces. An
             // elevated window a non-elevated daemon can't reposition would
             // otherwise restore as a column we can never fill (a ghost column);
             // dropping it here lets enumerate re-see it, record it, and notify.
             leopardwm_platform_win32::is_valid_window(hwnd)
                 && !leopardwm_platform_win32::is_excluded_window_class_hwnd(hwnd)
                 && !leopardwm_platform_win32::window_manage_block(hwnd).is_blocked()
+                && leopardwm_platform_win32::is_window_on_current_desktop(hwnd)
         });
         self.disable_snap_for_all_tiled_windows();
         restored_slots

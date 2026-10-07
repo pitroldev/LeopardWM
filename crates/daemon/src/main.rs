@@ -55,6 +55,8 @@ mod transitions;
 mod tray;
 mod ui_sync;
 mod update_check;
+#[cfg(test)]
+mod virtual_desktop_tests;
 mod window_rules;
 mod workspace_ipc;
 #[cfg(test)]
