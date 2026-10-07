@@ -104,6 +104,25 @@ fn native_region_roundtrip_preserves_complex_and_empty_shapes() {
     }
 }
 
+#[test]
+fn containment_distinguishes_missing_regions_from_empty_and_bounded_regions() {
+    let bounds = [100, 0, 500, 600];
+    assert!(!region_is_contained(&None, bounds));
+    assert!(region_is_contained(&Some(vec![]), bounds));
+    assert!(region_is_contained(
+        &Some(vec![[100, 0, 200, 100], [300, 400, 500, 600]]),
+        bounds
+    ));
+    for r in [
+        [99, 0, 200, 100],
+        [100, -1, 200, 100],
+        [100, 0, 501, 600],
+        [100, 0, 500, 601],
+    ] {
+        assert!(!region_is_contained(&Some(vec![r]), bounds));
+    }
+}
+
 // Opt-in test uses production placement and recovery, in a deadline-supervised
 // child. It creates only owned non-activating, tool-window fixtures; it never
 // selects, closes or manipulates an existing user application.

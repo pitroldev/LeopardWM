@@ -65,7 +65,61 @@ Build a portable preview with `cargo build --release`; keep all four executables
 from `target/x86_64-pc-windows-msvc/release` together, including the watchdog.
 
 Computer Use native pipe returned OS error 2 after repeated retries and session
-reset. The user explicitly accepted native testing as the fallback. There is no
-claim of visual acceptance or application compatibility for browsers, editors or
-custom client-side frames. The preview has not been installed or left running;
-the existing desktop setup is preserved.
+reset. The user explicitly accepted native testing as the fallback. These tests
+do not establish visual acceptance for everyday applications or custom frames.
+The preview is portable and the existing desktop setup is preserved.
+
+## Follow-up after desktop rejection
+
+The user tested 3f32dad with clipping enabled and reported that a window still
+invaded another monitor. The daemon and watchdog were stopped cleanly; recovery
+left no clip journals. Static Win32 fixture success did not establish app-level
+containment. The desktop now has a third 3840x2160 monitor at 175% DPI above the
+two 2560x1440 monitors, as recorded by the local daemon log.
+
+Plan: reproduce using an opt-in, isolated blank Chrome process (fresh test-only
+profile, PID-scoped ownership); cover stationary readback after placement, region
+replacement by the application, cached animation frames and DPI/monitor changes.
+Fix the reproduced cause and add a regression, then rerun the repository check
+and release build. Keep the desktop daemon stopped during implementation.
+
+Implemented follow-up:
+- Acquire clipping ownership on cached placements even if no SetWindowPos is
+  needed. The isolated Chrome regression failed before this change (missing
+  region after a cache hit) and passed afterwards.
+- At the existing 500 ms idle check, inspect native region containment without
+  taking the mutation lock. If a region was removed/expanded by an app, invalidate
+  native presentation and dispatch a normal bounded apply worker. Healthy windows
+  are not moved; pause, animation, display-change and shutdown gates are respected.
+- Idle ownership uses the last presentation after successful landing clears the
+  pending map; current float/maximize/fullscreen/drag exemptions are rechecked.
+- Startup logs now explicitly include the effective `clip_tiled_windows` flag.
+
+Follow-up validation:
+- Isolated Chrome passed on all three actual monitors at 100%, 125% and 175%,
+  including all four edges, same-rectangle cached policy acquisition and repair
+  after simulated application region replacement. Its profile is test-only under
+  the ignored root target directory; existing browser processes/profiles are not used.
+- A separate opt-in daemon fixture passed through AppState and the real apply
+  worker: removing the region from a stationary window caused an unchanged layout
+  to dispatch again and restore the clip. The fixture owns one non-activating HWND
+  on a pumping thread and does not install global hooks or start the desktop daemon.
+- Original LTR/RTL scrolling, original-region and cross-process recovery fixtures
+  also passed on the three monitors.
+- Final repository validation passed Clippy, 2,114 workspace tests and the tools
+  tests with `pwsh -NoProfile -File tools/check.ps1`.
+- `cargo fmt --all -- --check`, the optimized release build and both executable
+  subsystem/version verification scripts passed for the updated candidate.
+
+```powershell
+$env:LEOPARDWM_TEST_CLIP_CHROME_EXE = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+cargo test -p leopardwm-platform-win32 isolated_chrome_stays_contained_after_landing -- --ignored --nocapture
+Remove-Item Env:\LEOPARDWM_TEST_CLIP_CHROME_EXE
+$env:LEOPARDWM_TEST_MONITOR_CLIPPING = '1'
+cargo test -p leopardwm-daemon stationary_repair_dispatches_the_unchanged_layout_through_the_daemon_worker -- --ignored --nocapture
+Remove-Item Env:\LEOPARDWM_TEST_MONITOR_CLIPPING
+```
+
+These regressions validate the repaired paths, not the reporter's exact desktop
+sequence or pixel-level DWM presentation. Full desktop acceptance remains pending.
+The preview remains experimental and the desktop daemon remains stopped.

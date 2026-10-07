@@ -70,7 +70,9 @@ pub use focus::{
     restore_window_no_activate, set_foreground_window, visible_window_z_order,
     warp_cursor_to_window,
 };
-pub use monitor_clipping::{restore_all_window_regions, restore_window_region};
+pub use monitor_clipping::{
+    monitor_clip_repair_needed, restore_all_window_regions, restore_window_region,
+};
 pub use placement::apply_cloak_state;
 pub use placement::clear_suspected_oversize;
 pub use placement::{

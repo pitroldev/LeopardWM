@@ -6,10 +6,14 @@
 
 use crate::state::*;
 use leopardwm_core_layout::{Rect, Visibility, WindowPlacement};
-use leopardwm_platform_win32::{MonitorId, MonitorInfo, PlacementLanding};
+use leopardwm_platform_win32::{MonitorId, MonitorInfo, PlacementLanding, PlatformConfig};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use tracing::{debug, warn};
+
+#[cfg(test)]
+#[path = "monitor_clipping_native_tests.rs"]
+mod native_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct ConstrainedAxes {
@@ -473,7 +477,14 @@ impl AppState {
     }
 
     pub(crate) fn tiled_clip_owners(&self) -> HashMap<u64, Rect> {
-        self.pending_physical_presentations
+        self.clip_owners_for_presentations(&self.pending_physical_presentations)
+    }
+
+    fn clip_owners_for_presentations(
+        &self,
+        presentations: &HashMap<u64, PhysicalPresentation>,
+    ) -> HashMap<u64, Rect> {
+        presentations
             .iter()
             .filter(|(_, presentation)| !self.is_projection_exempt(&presentation.physical))
             .filter_map(|(&id, _)| {
@@ -481,6 +492,38 @@ impl AppState {
                 Some((id, self.monitors.get(&owner)?.rect))
             })
             .collect()
+    }
+
+    pub(crate) fn monitor_clip_repair_config(&self) -> Option<PlatformConfig> {
+        if !self.config.behavior.clip_tiled_windows
+            || self.paused
+            || self.applying_layout
+            || self.is_animating()
+            || self.display_change_pending
+            || self.apply_worker_cancelled.load(Ordering::SeqCst)
+        {
+            return None;
+        }
+        let mut config = self.platform_config.clone();
+        config.monitor_rects = self.monitors.values().map(|monitor| monitor.rect).collect();
+        // Successful landings clear the pending map. Stationary ownership must
+        // come from the last submitted presentation, rechecking current exemptions.
+        config.clip_owners = self.clip_owners_for_presentations(&self.last_physical_presentations);
+        Some(config)
+    }
+
+    pub(crate) fn repair_stationary_monitor_clips(&mut self) -> anyhow::Result<bool> {
+        let Some(config) = self.monitor_clip_repair_config() else {
+            return Ok(false);
+        };
+        if !leopardwm_platform_win32::monitor_clip_repair_needed(&config)? {
+            return Ok(false);
+        }
+        warn!("Reapplying native monitor clips after containment changed");
+        // Force a worker even though the logical rectangles are unchanged.
+        self.bump_physical_invalidation();
+        self.apply_layout()?;
+        Ok(true)
     }
 
     fn current_pending_physical_presentation(
@@ -911,6 +954,61 @@ mod tests {
         config.behavior.clip_tiled_windows = false;
         state.apply_config(config);
         assert!(state.physical_invalidation_id.load(Ordering::SeqCst) > before);
+    }
+
+    #[test]
+    fn stationary_clip_repair_uses_last_presentation_and_current_exemptions() {
+        let mut state = AppState::new_with_config(
+            crate::config::Config::default(),
+            vec![monitor(1, 0, 0, 1920, 1080)],
+        );
+        state.config.behavior.clip_tiled_windows = true;
+        state.workspaces.get_mut(&1).unwrap()[0]
+            .insert_window(100, Some(800))
+            .unwrap();
+        state.apply_physical_projection(vec![placement(
+            100,
+            Rect::new(-100, 0, 800, 600),
+            Visibility::Visible,
+        )]);
+        state.last_physical_presentations = state.pending_physical_presentations.clone();
+        state.pending_physical_presentations.clear();
+        // Inspect repair policy only; do not dispatch a native worker for fake IDs.
+        state.paused = false;
+        state.workspaces.get_mut(&1).unwrap()[0].stop_animation();
+        assert_eq!(
+            state
+                .monitor_clip_repair_config()
+                .unwrap()
+                .clip_owners
+                .get(&100),
+            Some(&state.monitors[&1].rect)
+        );
+        state.injected_window_maximized.insert(100, true);
+        assert!(state
+            .monitor_clip_repair_config()
+            .unwrap()
+            .clip_owners
+            .is_empty());
+        state.injected_window_maximized.insert(100, false);
+        state.workspaces.get_mut(&1).unwrap()[0].toggle_fullscreen();
+        assert!(state
+            .monitor_clip_repair_config()
+            .unwrap()
+            .clip_owners
+            .is_empty());
+        state.workspaces.get_mut(&1).unwrap()[0].toggle_fullscreen();
+        state.paused = true;
+        assert!(state.monitor_clip_repair_config().is_none());
+        state.paused = false;
+        state.applying_layout = true;
+        assert!(state.monitor_clip_repair_config().is_none());
+        state.applying_layout = false;
+        state.apply_worker_cancelled.store(true, Ordering::SeqCst);
+        assert!(state.monitor_clip_repair_config().is_none());
+        state.apply_worker_cancelled.store(false, Ordering::SeqCst);
+        state.config.behavior.clip_tiled_windows = false;
+        assert!(state.monitor_clip_repair_config().is_none());
     }
 
     #[test]

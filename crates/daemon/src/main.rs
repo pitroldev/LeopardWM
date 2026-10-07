@@ -2536,6 +2536,9 @@ async fn handle_periodic_check(ctx: &mut EventLoopCtx<'_>) {
     let mut state = ctx.state.lock().await;
     let focus_changed = state.check_tracked_focus_liveness();
     let moves_checked = state.recheck_deferred_window_moves();
+    if let Err(error) = state.repair_stationary_monitor_clips() {
+        warn!("Stationary monitor clipping repair failed: {error}");
+    }
     if !focus_changed && !moves_checked {
         return;
     }
@@ -3667,14 +3670,15 @@ async fn main() -> Result<()> {
     }
 
     info!(
-        "Configuration loaded: gap={}, outer_gaps=[{},{},{},{}], width_presets={:?}, log_level={}",
+        "Configuration loaded: gap={}, outer_gaps=[{},{},{},{}], width_presets={:?}, log_level={}, clip_tiled_windows={}",
         config.layout.gap,
         config.layout.outer_gap_left,
         config.layout.outer_gap_right,
         config.layout.outer_gap_top,
         config.layout.outer_gap_bottom,
         config.layout.width_presets,
-        config.behavior.log_level
+        config.behavior.log_level,
+        config.behavior.clip_tiled_windows
     );
 
     let monitors = detect_monitors();

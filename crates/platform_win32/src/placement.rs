@@ -635,7 +635,7 @@ fn apply_placements_inner(
         !(config.clip_owners.contains_key(&entry.window_id)
             && owner_deferrals.wait_for_owner.contains(&entry.window_id))
     });
-    let clip_targets = entries
+    let mut clip_targets: HashMap<_, _> = entries
         .iter()
         .map(|entry| {
             (
@@ -644,6 +644,23 @@ fn apply_placements_inner(
             )
         })
         .collect();
+    // A cached rectangle does not prove that its monitor presentation is still
+    // installed: policy/ownership or an app's own region may have changed.
+    // Prepare the current outer geometry without issuing a redundant move.
+    for placement in placements {
+        let id = placement.window_id;
+        if config.clip_owners.contains_key(&id)
+            && !clip_targets.contains_key(&id)
+            && !owner_deferrals.wait_for_owner.contains(&id)
+            && !owner_deferrals.pending.contains(&id)
+            && placement.visibility == Visibility::Visible
+            && !crate::is_window_maximized(id)
+        {
+            if let Some(outer) = crate::get_window_chrome_rect(id) {
+                clip_targets.insert(id, (outer, get_window_invisible_insets(id)));
+            }
+        }
+    }
     crate::monitor_clipping::prepare_clips(&clip_targets, config, &owner_deferrals.pending)?;
     // Uncloak before positioning so DWM composites returning windows at their
     // new rect before the landing measurement. The retry can repeat this safely.

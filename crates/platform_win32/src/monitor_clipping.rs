@@ -555,6 +555,55 @@ pub(crate) fn saved_insets(id: WindowId) -> Option<Insets> {
     .then_some(insets)
 }
 
+fn region_is_contained(region: &Region, bounds: [i32; 4]) -> bool {
+    region.as_ref().is_some_and(|rects| {
+        rects.iter().all(|r| {
+            r[0] >= bounds[0] && r[1] >= bounds[1] && r[2] <= bounds[2] && r[3] <= bounds[3]
+        })
+    })
+}
+
+/// Read-only health check for stationary windows. Region updates do not have to
+/// change native geometry, so the daemon's layout fast path cannot detect them.
+/// This deliberately avoids CLIPS, whose mutation lock can be held by a foreign
+/// application's synchronous SetWindowRgn call.
+pub fn monitor_clip_repair_needed(config: &PlatformConfig) -> Result<bool, Win32Error> {
+    let owned: HashMap<_, _> = GEOMETRY
+        .lock()
+        .unwrap_or_else(crate::recover_poisoned_mutex)
+        .iter()
+        .map(|(&id, &(token, _))| (id, token))
+        .collect();
+    if owned.keys().any(|id| !config.clip_owners.contains_key(id)) {
+        return Ok(true);
+    }
+    for (&id, &monitor) in &config.clip_owners {
+        let hwnd = window_id_to_hwnd(id)?;
+        if unsafe { !IsWindow(Some(hwnd)).as_bool() } {
+            continue;
+        }
+        let stamped = owned
+            .get(&id)
+            .is_some_and(|&token| unsafe { GetPropW(hwnd, PROPERTY).0 as usize as u64 == token });
+        if crate::is_window_maximized(id) {
+            if stamped {
+                return Ok(true);
+            }
+            continue;
+        }
+        let outer = outer_rect(id)?;
+        let bounds = local_clip(outer, monitor, is_rtl(hwnd));
+        if full_clip(outer, bounds) {
+            if stamped {
+                return Ok(true);
+            }
+        } else if !region_is_contained(&query_region(hwnd)?, bounds) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub fn restore_window_region(id: WindowId) -> Result<(), Win32Error> {
     let mut clips = CLIPS.lock().unwrap_or_else(crate::recover_poisoned_mutex);
     let saved = clips.get(&id).cloned();
@@ -630,3 +679,7 @@ pub fn restore_all_window_regions() -> Result<(), Win32Error> {
 #[cfg(test)]
 #[path = "monitor_clipping_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "monitor_clipping_chrome_tests.rs"]
+mod chrome_tests;
