@@ -30,6 +30,7 @@ mod managed_lifetime;
 #[cfg(test)]
 mod managed_lifetime_tests;
 mod monitors;
+mod native_desktop_import;
 mod notify;
 mod overview;
 mod persistence;
@@ -91,6 +92,8 @@ use tracing::{debug, error, info, warn, Level};
 #[derive(Parser, Debug, Clone)]
 #[command(name = "leopardwm", about = "LeopardWM tiling window manager daemon")]
 pub struct Args {
+    #[command(subcommand)]
+    pub offline: Option<native_desktop_import::OfflineCommand>,
     /// Disable global hotkey registration
     #[arg(long)]
     pub no_hotkeys: bool,
@@ -3641,10 +3644,7 @@ async fn initialize_state(
     state
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let args = Args::parse();
-
+async fn acquire_operation_lock() -> Result<native_desktop_import::OperationLock> {
     // Reject a duplicate before bootstrap opens the opt-in capture artifact.
     let ipc_pipe_names = pipe_name_candidates();
     if check_already_running().await {
@@ -3655,6 +3655,17 @@ async fn main() -> Result<()> {
             ipc_pipe_names.join(", ")
         );
         std::process::exit(1);
+    }
+
+    native_desktop_import::OperationLock::acquire()
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let args = Args::parse();
+    let _operation_lock = acquire_operation_lock().await?;
+    if let Some(command) = args.offline.clone() {
+        return native_desktop_import::run(command);
     }
 
     let (config, config_warnings, _gesture_capture, log_health) = bootstrap_config()?;

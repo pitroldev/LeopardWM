@@ -16,6 +16,30 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
+#[test]
+fn native_desktop_import_requires_explicit_apply_and_rejects_conflicting_modes() {
+    let cli = Cli::try_parse_from(["lwm", "import-native-desktops"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Commands::ImportNativeDesktops {
+            apply: false,
+            restore: None,
+            ..
+        }
+    ));
+    assert!(
+        Cli::try_parse_from(["lwm", "import-native-desktops", "--keep-native-desktops"]).is_err()
+    );
+    assert!(Cli::try_parse_from([
+        "lwm",
+        "import-native-desktops",
+        "--apply",
+        "--restore",
+        "backup"
+    ])
+    .is_err());
+}
+
 // =========================================================================
 // to_ipc_command tests
 // =========================================================================

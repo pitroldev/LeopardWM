@@ -11180,6 +11180,7 @@ fn test_find_window_workspace_floating_not_snapped() {
 #[test]
 fn test_args_default_all_false() {
     let args = Args {
+        offline: None,
         no_hotkeys: false,
         safe_mode: false,
     };
@@ -11189,6 +11190,7 @@ fn test_args_default_all_false() {
 #[test]
 fn test_args_no_hotkeys() {
     let args = Args {
+        offline: None,
         no_hotkeys: true,
         safe_mode: false,
     };
@@ -11198,6 +11200,7 @@ fn test_args_no_hotkeys() {
 #[test]
 fn test_args_safe_mode_implies_no_hotkeys() {
     let args = Args {
+        offline: None,
         no_hotkeys: false,
         safe_mode: true,
     };

@@ -17,6 +17,7 @@ pub mod hotkeys;
 pub mod ipc_security;
 pub mod keyboard_hook;
 pub mod mouse_hook;
+pub mod native_desktop_import;
 pub mod overlay;
 pub mod overview;
 mod raw_touchpad;

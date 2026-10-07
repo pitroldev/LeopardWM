@@ -38,6 +38,15 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Commands {
+    /// Preview or perform a one-time native Windows desktop migration (daemon stopped).
+    ImportNativeDesktops {
+        #[arg(long, conflicts_with = "restore")]
+        apply: bool,
+        #[arg(long, requires = "apply")]
+        keep_native_desktops: bool,
+        #[arg(long)]
+        restore: Option<PathBuf>,
+    },
     /// Focus commands
     Focus {
         #[command(subcommand)]

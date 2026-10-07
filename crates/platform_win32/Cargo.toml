@@ -18,6 +18,10 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 winreg = "0.56"
+# Used only by the explicit, offline native-desktop importer. Pin the private
+# shell interface binding; normal tiling uses the documented read-only API.
+winvd = "=0.0.49"
+windows_058 = { package = "windows", version = "0.58", features = ["Win32_Foundation"] }
 
 [dev-dependencies]
 # Only the developer diagnostic needs the pointer injection bindings.

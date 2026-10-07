@@ -102,6 +102,7 @@ pub(crate) fn to_ipc_command(cmd: &Commands) -> IpcCommand {
         Commands::Status => IpcCommand::QueryStatus,
         Commands::PanicRevert => IpcCommand::PanicRevert,
         Commands::Run { .. } => unreachable!("Run handled separately"),
+        Commands::ImportNativeDesktops { .. } => unreachable!("Import runs offline"),
         Commands::Subscribe { .. } => unreachable!("Subscribe handled separately"),
         Commands::Doctor { .. } => unreachable!("Doctor handled separately"),
         Commands::Autostart { .. } => unreachable!("Autostart handled separately"),

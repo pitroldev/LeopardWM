@@ -42,6 +42,17 @@ async fn main() -> Result<()> {
 
     // Handle locally-executed commands (do not use IPC command mapping)
     match cli.command {
+        Commands::ImportNativeDesktops {
+            apply,
+            keep_native_desktops,
+            restore,
+        } => {
+            return daemon_cmds::handle_import_native_desktops(
+                apply,
+                keep_native_desktops,
+                restore,
+            );
+        }
         Commands::Run {
             no_apply,
             wait_ms,

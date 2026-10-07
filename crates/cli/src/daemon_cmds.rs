@@ -79,6 +79,40 @@ fn ensure_daemon_binary() -> Result<PathBuf> {
     find_daemon_binary().context("Daemon binary still not found after build")
 }
 
+/// Run the import in the matching daemon executable, without starting its event
+/// loop. The child holds the same instance gate as ordinary daemon startup.
+pub(crate) fn handle_import_native_desktops(
+    apply: bool,
+    keep: bool,
+    restore: Option<PathBuf>,
+) -> Result<()> {
+    let path = find_daemon_binary().context("Matching leopardwm.exe not found next to the CLI")?;
+    let mut command = Command::new(path);
+    command.arg("import-native-desktops");
+    if apply {
+        command.arg("--apply");
+    }
+    if keep {
+        command.arg("--keep-native-desktops");
+    }
+    if let Some(directory) = restore {
+        command.arg("--restore").arg(directory);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let status = command
+        .status()
+        .context("Failed to run native desktop importer")?;
+    anyhow::ensure!(
+        status.success(),
+        "Native desktop importer failed ({status})"
+    );
+    Ok(())
+}
+
 #[cfg(windows)]
 fn apply_detach_flags(cmd: &mut Command) {
     use std::os::windows::process::CommandExt;
