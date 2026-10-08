@@ -2074,6 +2074,42 @@ mod tests {
     }
 
     #[test]
+    fn zero_duration_scroll_commits_without_entering_animation_lifecycle() {
+        for explicit in [false, true] {
+            let mut ws = Workspace::with_gaps(10, 10);
+            ws.insert_window(1, Some(400)).unwrap();
+            ws.insert_window(2, Some(400)).unwrap();
+            ws.set_scroll_animation(if explicit { 300 } else { 0 }, Easing::Linear);
+            ws.start_scroll_animation(200.0, 500, explicit.then_some(0), None);
+            assert!(
+                !ws.is_animating(),
+                "zero duration must not schedule a landing nudge"
+            );
+            assert_eq!(ws.scroll_offset(), 200.0);
+            assert_eq!(ws.effective_scroll_offset(), 200.0);
+            assert!(!ws.tick_animation(0));
+        }
+    }
+
+    #[test]
+    fn zero_duration_scroll_replaces_inflight_animation_and_allows_explicit_animation() {
+        let mut ws = Workspace::with_gaps(10, 10);
+        ws.insert_window(1, Some(400)).unwrap();
+        ws.insert_window(2, Some(400)).unwrap();
+        ws.set_scroll_animation(0, Easing::Linear);
+        ws.start_scroll_animation(200.0, 500, Some(100), None);
+        assert!(
+            ws.is_animating(),
+            "explicit positive duration must still animate"
+        );
+        ws.tick_animation(50);
+        ws.start_scroll_animation(300.0, 500, None, None);
+        assert!(!ws.is_animating());
+        assert_eq!(ws.scroll_offset(), 300.0);
+        assert_eq!(ws.effective_scroll_offset(), 300.0);
+    }
+
+    #[test]
     fn test_workspace_stop_animation() {
         let mut ws = Workspace::with_gaps(10, 10);
         ws.insert_window(1, Some(400)).unwrap();

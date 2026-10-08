@@ -557,6 +557,14 @@ impl Workspace {
         // Explicit args win; otherwise use this workspace's configured
         // scroll params (set by the daemon from `[animation]`).
         let duration = duration_ms.unwrap_or(self.scroll_duration_ms);
+        if duration == 0 {
+            // An instantaneous scroll is already settled. Keeping a completed
+            // animation here still schedules an async frame and the daemon's
+            // compositor-repair resize at landing, causing a 1px focus wobble.
+            self.scroll_offset = target;
+            self.active_animation = None;
+            return;
+        }
         let ease = easing.unwrap_or(self.scroll_easing);
 
         self.active_animation = Some(ScrollAnimation::new(start, target, duration, ease));

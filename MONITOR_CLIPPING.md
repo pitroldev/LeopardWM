@@ -190,3 +190,32 @@ One full-suite repetition hit the existing asynchronous size-only owner-deferral
 assertion in `display_change_regression.rs:330`. The focused rerun and the final
 unmodified `tools/check.ps1` run passed (Clippy, 2,114 tests, tools tests). Its
 timing sensitivity was not addressed by this startup-desktop change.
+
+## Transient Chrome frame artifact while scrolling
+
+A later user report distinguished a temporary cut border/extra strip during focus
+scrolling from a persistent size change. Native sampling on the 125% DPI monitor
+observed the region/backdrop switching between clipped and fully visible states,
+plus the existing compositor-repair `(w-1 -> w)` pair at animation landing.
+Sequential frame/region readback also recorded temporary overcropping; these
+measurements are not screenshots or atomic DWM presentation observations.
+
+Immediate mitigation is `[animation] scroll_duration_ms = 0`, followed by
+`lwm reload`. Scrolling remains available but its movement is instantaneous.
+Other animation durations can stay enabled. Smooth scrolling with a changing
+native clip remains experimental; this mitigation does not repair its rendering.
+
+Zero duration previously still allocated a completed `ScrollAnimation`, leaving
+`Workspace::is_animating()` true until the next tick. The daemon consequently
+scheduled an async frame and the unnecessary compositor-repair resize. The core
+now commits the target immediately and clears the active animation. Regression
+tests cover configured and explicit zero duration, interrupted animations and a
+positive explicit override. Both tests failed before the correction and pass
+afterward; the repository check passes Clippy, 2,128 tests and tools tests.
+
+The updated full daemon was exercised through eight focus changes involving a
+real Chrome window. All 1,000 native samples kept its outer size at 1707x1404
+and client size at 1689x1395, eliminating the previous one-pixel resize pair.
+Sequential region/position queries still caught three transient mismatches at
+instant jumps; they do not establish atomic compositor presentation. Computer
+Use again failed with native-pipe error 2, so visual acceptance remains pending.
