@@ -168,6 +168,27 @@ fn isolated_chrome_stays_contained_after_landing() {
                 visibility: leopardwm_core_layout::Visibility::Visible,
                 column_index: 0,
             };
+            let owner = monitor.rect;
+            crate::placement::observe_landing_flush(
+                move || {
+                    let outer = outer_rect(id).unwrap();
+                    let bounds = local_clip(outer, owner, is_rtl(hwnd));
+                    let region = query_region(hwnd).unwrap();
+                    if full_clip(outer, bounds) {
+                        assert!(
+                            region.is_none(),
+                            "Chrome presented a stale crop inside its monitor"
+                        );
+                    } else {
+                        let expected = region_data(make_region(&[bounds]).unwrap().0).unwrap();
+                        assert_eq!(region, expected, "Chrome presented an intermediate crop");
+                    }
+                },
+                || {
+                    crate::apply_placements(std::slice::from_ref(&placement), &config, None, false)
+                        .unwrap();
+                },
+            );
             crate::apply_placements(
                 std::slice::from_ref(&placement),
                 &config,

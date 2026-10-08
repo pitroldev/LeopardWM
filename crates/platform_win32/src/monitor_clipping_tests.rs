@@ -229,6 +229,7 @@ fn native_fixture() {
             clip_owners: HashMap::from([(id, owner)]),
         };
         let insets = crate::get_window_invisible_insets(id);
+        exercise_landing_presentation(id, owner, &config);
         let mut client_before = RECT::default();
         let mut cache = crate::PlacementCache::new();
         for x in [
@@ -335,6 +336,52 @@ fn native_fixture() {
         }
         drop(fixture);
     }
+}
+
+fn exercise_landing_presentation(id: WindowId, owner: Rect, config: &PlatformConfig) {
+    let observations = std::rc::Rc::new(std::cell::Cell::new(0));
+    let observed = observations.clone();
+    crate::placement::observe_landing_flush(
+        move || {
+            let hwnd = window_id_to_hwnd(id).unwrap();
+            let outer = outer_rect(id).unwrap();
+            let bounds = local_clip(outer, owner, is_rtl(hwnd));
+            let region = query_region(hwnd).unwrap();
+            let expected = if full_clip(outer, bounds) {
+                None
+            } else {
+                region_data(make_region(&[bounds]).unwrap().0).unwrap()
+            };
+            assert_eq!(
+                region, expected,
+                "composition barrier presented the intermediate crop at {outer:?}"
+            );
+            observed.set(observed.get() + 1);
+        },
+        || {
+            // Direct synchronous focus jumps must be correct at presentation,
+            // including changes between clipped and fully visible endpoints.
+            for x in [
+                owner.x + 100,
+                owner.x - 400,
+                owner.x + 100,
+                owner.x + owner.width - 400,
+                owner.x + 100,
+            ] {
+                let placement = leopardwm_core_layout::WindowPlacement {
+                    window_id: id,
+                    rect: Rect::new(x, owner.y + 100, 800, 500),
+                    visibility: leopardwm_core_layout::Visibility::Visible,
+                    column_index: 0,
+                };
+                crate::apply_placements(&[placement], config, None, false).unwrap();
+            }
+        },
+    );
+    assert!(
+        observations.get() >= 5,
+        "fixture did not reach presentation"
+    );
 }
 
 fn recover_in_separate_process() {

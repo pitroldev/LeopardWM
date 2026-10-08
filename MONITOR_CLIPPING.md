@@ -200,7 +200,7 @@ plus the existing compositor-repair `(w-1 -> w)` pair at animation landing.
 Sequential frame/region readback also recorded temporary overcropping; these
 measurements are not screenshots or atomic DWM presentation observations.
 
-Immediate mitigation is `[animation] scroll_duration_ms = 0`, followed by
+The initial mitigation was `[animation] scroll_duration_ms = 0`, followed by
 `lwm reload`. Scrolling remains available but its movement is instantaneous.
 Other animation durations can stay enabled. Smooth scrolling with a changing
 native clip remains experimental; this mitigation does not repair its rendering.
@@ -219,3 +219,37 @@ and client size at 1689x1395, eliminating the previous one-pixel resize pair.
 Sequential region/position queries still caught three transient mismatches at
 instant jumps; they do not establish atomic compositor presentation. Computer
 Use again failed with native-pipe error 2, so visual acceptance remains pending.
+
+The user subsequently confirmed that instant scrolling still flashed. A native
+regression then reproduced a separate ordering error: the synchronous landing
+called `DwmFlush` while the conservative old/new intersection was still installed.
+After that barrier a fixture entirely inside its monitor still had 407 pixels
+cut from its left edge. Checking only the final return value missed this state.
+
+Placement now finalizes clips immediately after positioning, before the landing
+composition barrier. It uses observed geometry and continues to retain the
+intersection for pending owner-thread moves. The existing final reconciliation
+remains in place for app frame changes during measurement/compositor repair.
+
+The presentation-boundary regression failed before this change and passed after
+it on all three monitors, in both LTR and RTL layouts (100%, 125%, 175% DPI).
+The isolated Chrome acceptance also checks the region immediately after the
+landing barrier, at all four monitor edges and on return fully inside. It passed
+on all three monitors. These native checks validate region/position ordering;
+they do not capture compositor pixels or prove that all Chromium flicker is gone.
+
+The rebuilt daemon retained all 16 existing window/monitor/workspace memberships.
+Two live focus runs sampled the user's Chrome 1,000 times each. Instant scrolling
+kept outer/client sizes constant, but sequential queries still observed three
+intermediate crops. Animated scrolling still exposed transient crops and the
+existing one-pixel compositor nudge. The instant setting was restored after the
+comparison; config contents match the pre-test backup. Visual acceptance is
+still required, rather than treating these measurements as a flicker-free result.
+
+A separate 5,200-window-sample whole-desktop audit did not pass: it flagged one
+Slack window whose outer rectangle exactly matched DISPLAY1 while its recorded
+workspace belonged to DISPLAY3. That audit excludes native maximize/floating but
+does not identify the daemon's application-fullscreen exemptions. Whether this
+was a fullscreen classification or another placement issue was not established;
+this result must not be described as clean whole-desktop containment. The scoped
+native/Chrome clipping regressions and the full repository check passed.

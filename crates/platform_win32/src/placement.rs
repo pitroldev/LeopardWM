@@ -673,6 +673,12 @@ fn apply_placements_inner(
         &pending_window_ids,
         queued_endpoints,
     );
+    // The old/new intersection is only a guard while the position changes.
+    // Commit the clip for the observed geometry before any DwmFlush below:
+    // otherwise the landing measurement presents that guard for a whole frame,
+    // visibly cutting a strip from a window returning inside its monitor.
+    // Pending owner-thread moves retain their conservative intersection.
+    crate::monitor_clipping::finish_clips(config, &pending_window_ids)?;
     if let Ok(mut records) = OFFSCREEN_PLACEMENTS.lock() {
         for entry in &entries {
             if entry.visibility != Visibility::Visible {
@@ -805,6 +811,8 @@ fn apply_placements_inner(
         nudge_sticky_compositor_windows(&nudge_targets);
     }
 
+    // App frame changes during measurement or the compositor repair above may
+    // replace a region; reconcile again before returning the final placement.
     crate::monitor_clipping::finish_clips(config, &pending_window_ids)?;
 
     let landings = if cache.is_none() {
@@ -1960,6 +1968,31 @@ fn classify_measurements_and_update_suspects(
         .collect()
 }
 
+#[cfg(test)]
+thread_local! {
+    static LANDING_FLUSH_OBSERVER: std::cell::RefCell<Option<Box<dyn Fn()>>> = const {
+        std::cell::RefCell::new(None)
+    };
+}
+
+/// Let native fixtures inspect the frame at the actual composition barrier,
+/// rather than only the already-finalized placement returned to callers.
+#[cfg(test)]
+pub(crate) fn observe_landing_flush<T>(
+    observer: impl Fn() + 'static,
+    run: impl FnOnce() -> T,
+) -> T {
+    struct RestoreObserver(Option<Box<dyn Fn()>>);
+    impl Drop for RestoreObserver {
+        fn drop(&mut self) {
+            LANDING_FLUSH_OBSERVER.with(|slot| *slot.borrow_mut() = self.0.take());
+        }
+    }
+    let _restore =
+        RestoreObserver(LANDING_FLUSH_OBSERVER.with(|slot| slot.replace(Some(Box::new(observer)))));
+    run()
+}
+
 /// Detect min-size violations on the landing pass via DWM visible bounds.
 fn detect_size_violations(
     entries: &[DeferEntry],
@@ -1974,6 +2007,12 @@ fn detect_size_violations(
     unsafe {
         let _ = DwmFlush();
     }
+    #[cfg(test)]
+    LANDING_FLUSH_OBSERVER.with(|slot| {
+        if let Some(observer) = slot.borrow().as_ref() {
+            observer();
+        }
+    });
 
     let mut measurements = Vec::new();
     for entry in entries {
